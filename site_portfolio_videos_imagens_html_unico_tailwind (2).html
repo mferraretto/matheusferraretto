@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfólio | Casa Rosa Bela Arts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <header class="sticky top-0 z-50 backdrop-blur bg-white/80 border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <h1 class="font-semibold tracking-tight">Casa Rosa Bela Arts</h1>
+      <nav class="flex gap-4 text-sm">
+        <a href="#portfolio" class="hover:text-primary">Portfólio</a>
+        <a href="#videos" class="hover:text-primary">Vídeos</a>
+        <a href="#contato" class="hover:text-primary">Contato</a>
+      </nav>
+      <a href="#admin" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">Login</a>
+    </div>
+  </header>
+
+  <section id="portfolio" class="py-16">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-3xl font-bold mb-6">Portfólio de Imagens</h2>
+      <div id="grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+  </section>
+
+  <section id="videos" class="py-16 bg-slate-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-3xl font-bold mb-6">Galeria de Vídeos</h2>
+      <div id="videoGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+  </section>
+
+  <section id="admin" class="py-16 bg-white">
+    <div class="max-w-md mx-auto px-4">
+      <h2 class="text-2xl font-bold mb-4">Login Administrativo</h2>
+      <form id="loginForm" class="grid gap-4">
+        <input id="email" type="email" placeholder="E-mail" required class="px-3 py-2 border rounded-lg">
+        <input id="password" type="password" placeholder="Senha" required class="px-3 py-2 border rounded-lg">
+        <button type="submit" class="bg-primary text-white px-4 py-2 rounded-lg">Entrar</button>
+        <p id="loginStatus" class="text-sm text-slate-600"></p>
+      </form>
+
+      <form id="uploadForm" class="hidden mt-10 grid gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+        <h3 class="text-lg font-semibold">Adicionar novo item</h3>
+        <input id="fldTitle" placeholder="Título" required class="px-3 py-2 border rounded-lg">
+        <select id="fldType" class="px-3 py-2 border rounded-lg">
+          <option value="image">Imagem</option>
+          <option value="video">Vídeo</option>
+        </select>
+        <select id="fldCat" class="px-3 py-2 border rounded-lg">
+          <option value="foto">Fotos</option>
+          <option value="infografico">Infográficos</option>
+          <option value="ambiente">Ambientado</option>
+        </select>
+        <input id="fldCaption" placeholder="Legenda" class="px-3 py-2 border rounded-lg">
+        <input id="fldFile" type="file" accept="image/*,video/mp4" class="px-3 py-2 border rounded-lg">
+        <input id="fldEmbed" type="url" placeholder="https://www.youtube.com/embed/ID" class="px-3 py-2 border rounded-lg">
+        <button id="btnUpload" type="submit" class="bg-slate-900 text-white px-4 py-2 rounded-lg">Salvar</button>
+        <p id="uploadStatus" class="text-sm text-slate-600"></p>
+      </form>
+    </div>
+  </section>
+
+  <footer class="py-6 text-center text-sm text-slate-500 border-t">© <span id="year"></span> Casa Rosa Bela Arts</footer>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC78l9b2DTNj64y_0fbRKofNupO6NHDmeo",
+      authDomain: "matheus-35023.firebaseapp.com",
+      projectId: "matheus-35023",
+      storageBucket: "matheus-35023.appspot.com",
+      messagingSenderId: "1011113149395",
+      appId: "1:1011113149395:web:c1f449e0e974ca8ecb2526"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    const loginForm = document.getElementById('loginForm');
+    const uploadForm = document.getElementById('uploadForm');
+    const loginStatus = document.getElementById('loginStatus');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      loginStatus.textContent = 'Entrando...';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        loginStatus.textContent = 'Login realizado com sucesso!';
+      } catch (err) {
+        loginStatus.textContent = 'Erro: ' + err.message;
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loginForm.classList.add('hidden');
+        uploadForm.classList.remove('hidden');
+      } else {
+        loginForm.classList.remove('hidden');
+        uploadForm.classList.add('hidden');
+      }
+    });
+
+    const colRef = collection(db, 'SitePortfolio');
+
+    async function loadImages() {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      const q = query(colRef, orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (d.type !== 'image') return;
+        const fig = document.createElement('figure');
+        fig.innerHTML = `<img src="${d.url}" alt="${d.title}" class="w-full rounded-lg"> <figcaption>${d.title}</figcaption>`;
+        grid.appendChild(fig);
+      });
+    }
+
+    async function loadVideos() {
+      const grid = document.getElementById('videoGrid');
+      grid.innerHTML = '';
+      const q = query(colRef, orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (d.type !== 'video') return;
+        const vid = document.createElement('div');
+        vid.innerHTML = `<iframe src="${d.embedUrl || d.url}" class="w-full rounded-lg aspect-video"></iframe><p>${d.title}</p>`;
+        grid.appendChild(vid);
+      });
+    }
+
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('fldTitle').value;
+      const type = document.getElementById('fldType').value;
+      const category = document.getElementById('fldCat').value;
+      const caption = document.getElementById('fldCaption').value;
+      const file = document.getElementById('fldFile').files[0];
+      const embedUrl = document.getElementById('fldEmbed').value;
+      const status = document.getElementById('uploadStatus');
+
+      try {
+        let url = '';
+        if (file) {
+          const path = `portfolio/${type}/${Date.now()}-${file.name}`;
+          const sref = ref(storage, path);
+          await uploadBytes(sref, file);
+          url = await getDownloadURL(sref);
+        }
+        await addDoc(colRef, {
+          title, type, category, caption, url, embedUrl,
+          createdAt: serverTimestamp()
+        });
+        status.textContent = 'Item salvo com sucesso!';
+        loadImages();
+        loadVideos();
+        uploadForm.reset();
+      } catch (err) {
+        status.textContent = 'Erro: ' + err.message;
+      }
+    });
+
+    loadImages();
+    loadVideos();
+  </script>
+</body>
+</html>
