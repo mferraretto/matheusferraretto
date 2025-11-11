@@ -9,11 +9,11 @@
 <body class="bg-slate-50 text-slate-800">
   <header class="sticky top-0 z-50 backdrop-blur bg-white/80 border-b border-slate-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-      <h1 class="font-semibold tracking-tight">Casa Rosa Bela Arts</h1>
+      <h1 class="font-semibold tracking-tight">Matheus Ferraretto</h1>
       <nav class="flex gap-4 text-sm">
-        <a href="#portfolio" class="hover:text-primary">Portfólio</a>
-        <a href="#videos" class="hover:text-primary">Vídeos</a>
-        <a href="#contato" class="hover:text-primary">Contato</a>
+        <a href="#portfolio" class="hover:text-slate-900">Portfólio</a>
+        <a href="#videos" class="hover:text-slate-900">Vídeos</a>
+        <a href="#contato" class="hover:text-slate-900">Contato</a>
       </nav>
       <a href="#admin" class="px-3 py-2 rounded-xl border border-slate-300 text-sm">Login</a>
     </div>
@@ -22,14 +22,14 @@
   <section id="portfolio" class="py-16">
     <div class="max-w-7xl mx-auto px-4">
       <h2 class="text-3xl font-bold mb-6">Portfólio de Imagens</h2>
-      <div id="grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      <div id="imageAlbums" class="space-y-10"></div>
     </div>
   </section>
 
   <section id="videos" class="py-16 bg-slate-50">
     <div class="max-w-7xl mx-auto px-4">
       <h2 class="text-3xl font-bold mb-6">Galeria de Vídeos</h2>
-      <div id="videoGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      <div id="videoAlbums" class="space-y-10"></div>
     </div>
   </section>
 
@@ -39,7 +39,7 @@
       <form id="loginForm" class="grid gap-4">
         <input id="email" type="email" placeholder="E-mail" required class="px-3 py-2 border rounded-lg">
         <input id="password" type="password" placeholder="Senha" required class="px-3 py-2 border rounded-lg">
-        <button type="submit" class="bg-primary text-white px-4 py-2 rounded-lg">Entrar</button>
+        <button type="submit" class="bg-slate-900 text-white px-4 py-2 rounded-lg">Entrar</button>
         <p id="loginStatus" class="text-sm text-slate-600"></p>
       </form>
 
@@ -55,6 +55,11 @@
           <option value="infografico">Infográficos</option>
           <option value="ambiente">Ambientado</option>
         </select>
+        <div class="grid gap-2">
+          <label class="text-sm font-medium" for="fldAlbum">Álbum</label>
+          <select id="fldAlbum" class="px-3 py-2 border rounded-lg"></select>
+          <input id="fldNewAlbum" placeholder="ou crie um novo álbum" class="px-3 py-2 border rounded-lg">
+        </div>
         <input id="fldCaption" placeholder="Legenda" class="px-3 py-2 border rounded-lg">
         <input id="fldFile" type="file" accept="image/*,video/mp4" class="px-3 py-2 border rounded-lg">
         <input id="fldEmbed" type="url" placeholder="https://www.youtube.com/embed/ID" class="px-3 py-2 border rounded-lg">
@@ -64,11 +69,11 @@
     </div>
   </section>
 
-  <footer class="py-6 text-center text-sm text-slate-500 border-t">© <span id="year"></span> Casa Rosa Bela Arts</footer>
+  <footer class="py-6 text-center text-sm text-slate-500 border-t">© <span id="year"></span> Matheus Ferraretto</footer>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
 
@@ -89,6 +94,9 @@
     const loginForm = document.getElementById('loginForm');
     const uploadForm = document.getElementById('uploadForm');
     const loginStatus = document.getElementById('loginStatus');
+    const albumSelect = document.getElementById('fldAlbum');
+    const newAlbumInput = document.getElementById('fldNewAlbum');
+    const uploadStatus = document.getElementById('uploadStatus');
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -114,33 +122,131 @@
     });
 
     const colRef = collection(db, 'SitePortfolio');
+    const albumsRef = collection(db, 'Albums');
+    const albumsCache = new Map();
 
-    async function loadImages() {
-      const grid = document.getElementById('grid');
-      grid.innerHTML = '';
-      const q = query(colRef, orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
+    function populateAlbumSelect() {
+      albumSelect.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecione um álbum';
+      albumSelect.appendChild(placeholder);
+
+      Array.from(albumsCache.entries())
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .forEach(([id, name]) => {
+          const option = document.createElement('option');
+          option.value = id;
+          option.textContent = name;
+          albumSelect.appendChild(option);
+        });
+    }
+
+    async function loadAlbums() {
+      albumsCache.clear();
+      const qAlbums = query(albumsRef, orderBy('name'));
+      const snap = await getDocs(qAlbums);
       snap.forEach(doc => {
-        const d = doc.data();
-        if (d.type !== 'image') return;
-        const fig = document.createElement('figure');
-        fig.innerHTML = `<img src="${d.url}" alt="${d.title}" class="w-full rounded-lg"> <figcaption>${d.title}</figcaption>`;
-        grid.appendChild(fig);
+        const data = doc.data();
+        albumsCache.set(doc.id, data.name);
+      });
+      populateAlbumSelect();
+    }
+
+    function groupByAlbum(items) {
+      const grouped = new Map();
+      items.forEach(item => {
+        const key = item.albumId || 'sem-album';
+        const name = item.albumName || 'Sem álbum';
+        if (!grouped.has(key)) {
+          grouped.set(key, { name, items: [] });
+        }
+        grouped.get(key).items.push(item);
+      });
+      return Array.from(grouped.values());
+    }
+
+    function renderImages(items) {
+      const container = document.getElementById('imageAlbums');
+      container.innerHTML = '';
+      const images = items.filter(item => item.type === 'image');
+      if (!images.length) {
+        container.innerHTML = '<p class="text-sm text-slate-500">Nenhuma imagem cadastrada ainda.</p>';
+        return;
+      }
+
+      const groups = groupByAlbum(images);
+      groups.forEach(group => {
+        const section = document.createElement('section');
+        section.className = 'space-y-4';
+        section.innerHTML = `<h3 class="text-xl font-semibold">${group.name}</h3>`;
+
+        const grid = document.createElement('div');
+        grid.className = 'grid sm:grid-cols-2 lg:grid-cols-3 gap-6';
+
+        group.items.forEach(item => {
+          const figure = document.createElement('figure');
+          figure.className = 'space-y-2';
+          figure.innerHTML = `
+            <img src="${item.url}" alt="${item.title}" class="w-full rounded-lg object-cover">
+            <figcaption class="text-sm text-slate-600">
+              <span class="block font-semibold">${item.title}</span>
+              ${item.caption ? `<span class="block">${item.caption}</span>` : ''}
+            </figcaption>
+          `;
+          grid.appendChild(figure);
+        });
+
+        section.appendChild(grid);
+        container.appendChild(section);
       });
     }
 
-    async function loadVideos() {
-      const grid = document.getElementById('videoGrid');
-      grid.innerHTML = '';
-      const q = query(colRef, orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
-      snap.forEach(doc => {
-        const d = doc.data();
-        if (d.type !== 'video') return;
-        const vid = document.createElement('div');
-        vid.innerHTML = `<iframe src="${d.embedUrl || d.url}" class="w-full rounded-lg aspect-video"></iframe><p>${d.title}</p>`;
-        grid.appendChild(vid);
+    function renderVideos(items) {
+      const container = document.getElementById('videoAlbums');
+      container.innerHTML = '';
+      const videos = items.filter(item => item.type === 'video');
+      if (!videos.length) {
+        container.innerHTML = '<p class="text-sm text-slate-500">Nenhum vídeo cadastrado ainda.</p>';
+        return;
+      }
+
+      const groups = groupByAlbum(videos);
+      groups.forEach(group => {
+        const section = document.createElement('section');
+        section.className = 'space-y-4';
+        section.innerHTML = `<h3 class="text-xl font-semibold">${group.name}</h3>`;
+
+        const grid = document.createElement('div');
+        grid.className = 'grid sm:grid-cols-2 lg:grid-cols-3 gap-6';
+
+        group.items.forEach(item => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'space-y-2';
+          wrapper.innerHTML = `
+            <iframe src="${item.embedUrl || item.url}" class="w-full rounded-lg aspect-video" allowfullscreen></iframe>
+            <div class="text-sm text-slate-600">
+              <span class="block font-semibold">${item.title}</span>
+              ${item.caption ? `<span class="block">${item.caption}</span>` : ''}
+            </div>
+          `;
+          grid.appendChild(wrapper);
+        });
+
+        section.appendChild(grid);
+        container.appendChild(section);
       });
+    }
+
+    async function loadPortfolio() {
+      const qItems = query(colRef, orderBy('createdAt', 'desc'));
+      const snap = await getDocs(qItems);
+      const items = [];
+      snap.forEach(doc => {
+        items.push(doc.data());
+      });
+      renderImages(items);
+      renderVideos(items);
     }
 
     uploadForm.addEventListener('submit', async (e) => {
@@ -151,31 +257,71 @@
       const caption = document.getElementById('fldCaption').value;
       const file = document.getElementById('fldFile').files[0];
       const embedUrl = document.getElementById('fldEmbed').value;
-      const status = document.getElementById('uploadStatus');
+      const selectedAlbum = albumSelect.value;
+      const newAlbum = newAlbumInput.value.trim();
 
       try {
+        uploadStatus.textContent = 'Enviando...';
+
+        if (!selectedAlbum && !newAlbum) {
+          throw new Error('Selecione um álbum existente ou informe um novo nome.');
+        }
+
+        if (type === 'image' && !file) {
+          throw new Error('Selecione um arquivo de imagem para salvar.');
+        }
+
+        if (type === 'video' && !file && !embedUrl) {
+          throw new Error('Envie um arquivo de vídeo ou informe um link incorporado.');
+        }
+
+        let albumId = selectedAlbum;
+        let albumName = albumsCache.get(selectedAlbum) || '';
+
+        if (newAlbum) {
+          const albumDoc = await addDoc(albumsRef, {
+            name: newAlbum,
+            createdAt: serverTimestamp()
+          });
+          albumId = albumDoc.id;
+          albumName = newAlbum;
+          albumsCache.set(albumId, albumName);
+          populateAlbumSelect();
+          albumSelect.value = albumId;
+        }
+
         let url = '';
         if (file) {
-          const path = `portfolio/${type}/${Date.now()}-${file.name}`;
+          const path = `portfolio/${albumId}/${type}/${Date.now()}-${file.name}`;
           const sref = ref(storage, path);
           await uploadBytes(sref, file);
           url = await getDownloadURL(sref);
         }
+
         await addDoc(colRef, {
-          title, type, category, caption, url, embedUrl,
+          title,
+          type,
+          category,
+          caption,
+          url,
+          embedUrl,
+          albumId,
+          albumName,
           createdAt: serverTimestamp()
         });
-        status.textContent = 'Item salvo com sucesso!';
-        loadImages();
-        loadVideos();
+
+        uploadStatus.textContent = 'Item salvo com sucesso!';
         uploadForm.reset();
+        albumSelect.value = albumId;
+        await loadPortfolio();
       } catch (err) {
-        status.textContent = 'Erro: ' + err.message;
+        uploadStatus.textContent = 'Erro: ' + err.message;
       }
     });
 
-    loadImages();
-    loadVideos();
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    loadAlbums().then(loadPortfolio);
   </script>
 </body>
 </html>
