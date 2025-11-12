@@ -75,6 +75,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyC78l9b2DTNj64y_0fbRKofNupO6NHDmeo",
@@ -89,6 +90,7 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storageBucket = firebaseConfig.storageBucket;
+    const storage = getStorage(app);
 
     const loginForm = document.getElementById('loginForm');
     const uploadForm = document.getElementById('uploadForm');
@@ -333,50 +335,16 @@
         throw new Error('Bucket do Storage não está configurado.');
       }
 
-      const token = await currentUser.getIdToken();
-      const uploadUrl = new URL(`https://firebasestorage.googleapis.com/upload/storage/v1/b/${storageBucket}/o`);
-      uploadUrl.searchParams.set('uploadType', 'multipart');
-      uploadUrl.searchParams.set('name', path);
-      uploadUrl.searchParams.set('access_token', token);
+      const metadata = {
+        contentType: file.type || 'application/octet-stream',
+        customMetadata: {
+          uploader: currentUser.uid
+        }
+      };
 
-      const metadata = new Blob([
-        JSON.stringify({
-          name: path,
-          contentType: file.type || 'application/octet-stream'
-        })
-      ], { type: 'application/json' });
-
-      const formData = new FormData();
-      formData.append('metadata', metadata);
-      formData.append('file', file);
-
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-        mode: 'cors'
-      });
-
-      if (!response.ok) {
-        const message = await extractErrorMessage(response);
-        throw new Error(message || 'Falha ao enviar arquivo para o Storage.');
-      }
-
-      const result = await response.json();
-      if (!result.name || !result.downloadTokens) {
-        throw new Error('Resposta inesperada do Storage.');
-      }
-
-      const objectPath = encodeURIComponent(result.name);
-      return `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${objectPath}?alt=media&token=${result.downloadTokens}`;
-    }
-
-    async function extractErrorMessage(response) {
-      try {
-        const data = await response.json();
-        return data?.error?.message;
-      } catch (error) {
-        return null;
-      }
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file, metadata);
+      return await getDownloadURL(fileRef);
     }
   </script>
 </body>
